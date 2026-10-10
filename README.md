@@ -28,6 +28,6 @@ The model is trained on simulated data based on common wear patterns.
 With real service records, it can be retrained for higher accuracy.
 
 ## Team
-SAMADRITA GHOSH
-ARUNA DE
-SNEHIL RAJ SINGH
+-SAMADRITA GHOSH
+-ARUNA DE
+-SNEHIL RAJ SINGH
