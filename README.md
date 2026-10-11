@@ -1,4 +1,4 @@
-# Smart Car Health Predictor
+# CAR VITAL
 
 AI-powered car health checker built for the Maruti Suzuki Innovation Challenge
 (Domain: Automotive AI & Vehicle Intelligence).

@@ -1,10 +1,11 @@
 import base64
+import datetime
 import urllib.parse
 import streamlit as st
 import pandas as pd
 import joblib
 
-st.set_page_config(page_title="Smart Car Health Predictor", page_icon="🍃")
+st.set_page_config(page_title="CAR VITAL", page_icon="🍃")
 score_model = joblib.load("score_model.pkl")
 part_model = joblib.load("part_model.pkl")
 
@@ -13,7 +14,7 @@ with open("logo.png", "rb") as f:
 
 T = {
  "English": dict(
-  title="Smart Car Health Predictor", age="Car age (years)",
+  title="CAR VITAL", age="Car age (years)",
   km="Total km driven", kms="Km since last service",
   style="Driving style", styles=["Calm", "Normal", "Aggressive"],
   traffic="Traffic where you drive", traffics=["Low", "Medium", "Heavy"],
@@ -29,7 +30,7 @@ T = {
   parts={"Brakes": "Brake pads", "Engine oil": "Engine oil", "Suspension": "Suspension", "Battery": "Battery"},
   factors=["Km since service", "Car age", "Total km", "Driving style", "Traffic", "Road", "Monsoon"]),
  "हिन्दी": dict(
-  title="स्मार्ट कार हेल्थ प्रेडिक्टर", age="कार की उम्र (वर्ष)",
+  title="कार वाइटल", age="कार की उम्र (वर्ष)",
   km="कुल चली दूरी (किमी)", kms="पिछली सर्विस के बाद किमी",
   style="ड्राइविंग स्टाइल", styles=["शांत", "सामान्य", "तेज़"],
   traffic="ट्रैफिक", traffics=["कम", "मध्यम", "भारी"],
@@ -45,7 +46,7 @@ T = {
   parts={"Brakes": "ब्रेक पैड", "Engine oil": "इंजन ऑयल", "Suspension": "सस्पेंशन", "Battery": "बैटरी"},
   factors=["सर्विस के बाद किमी", "कार की उम्र", "कुल किमी", "ड्राइविंग", "ट्रैफिक", "सड़क", "मानसून"]),
  "বাংলা": dict(
-  title="স্মার্ট কার হেলথ প্রেডিক্টর", age="গাড়ির বয়স (বছর)",
+  title="কার ভাইটাল", age="গাড়ির বয়স (বছর)",
   km="মোট চালানো কিমি", kms="শেষ সার্ভিসের পর কিমি",
   style="ড্রাইভিং স্টাইল", styles=["শান্ত", "স্বাভাবিক", "দ্রুত"],
   traffic="ট্রাফিক", traffics=["কম", "মাঝারি", "বেশি"],
@@ -118,6 +119,13 @@ def section(icon, text):
 
 lang = st.radio("Language / भाषा / ভাষা", list(T.keys()), horizontal=True)
 t = T[lang]
+LAST = {
+ "English": ("Last service date", "Last serviced {m} months ago.", "Service overdue: more than 6 months since the last service."),
+ "हिन्दी": ("पिछली सर्विस की तारीख", "पिछली सर्विस {m} महीने पहले हुई थी।", "सर्विस ओवरड्यू: पिछली सर्विस को 6 महीने से ज़्यादा हो गए।"),
+ "বাংলা": ("শেষ সার্ভিসের তারিখ", "শেষ সার্ভিস {m} মাস আগে হয়েছে।", "সার্ভিস বাকি: শেষ সার্ভিসের পর ৬ মাসের বেশি হয়ে গেছে।"),
+}
+L = LAST[lang]
+
 
 costs = {"Brakes": (1500, 8000), "Engine oil": (2500, 15000),
          "Suspension": (3000, 12000), "Battery": (4500, 9000)}
@@ -132,6 +140,10 @@ style = st.selectbox("🌬️  " + t["style"], range(3), format_func=lambda i: t
 traffic = st.selectbox("🚦  " + t["traffic"], range(3), format_func=lambda i: t["traffics"][i])
 road = st.selectbox("🪨  " + t["road"], range(3), format_func=lambda i: t["roads"][i])
 monsoon = st.selectbox("🌧️  " + t["monsoon"], range(3), format_func=lambda i: t["monsoons"][i])
+today = datetime.date.today()
+last_date = st.date_input("📅  " + L[0], today - datetime.timedelta(days=90), max_value=today)
+months = (today - last_date).days // 30
+
 
 if st.button(t["button"]):
     row = pd.DataFrame([{"car_age": car_age, "km_driven": km_driven,
@@ -148,6 +160,13 @@ if st.button(t["button"]):
         st.warning(f"{score}/100 🟡 {t['attn']}")
     else:
         st.error(f"{score}/100 🔴 {t['risky']}")
+
+
+
+        st.caption(L[1].format(m=months))
+    if months > 6:
+        st.warning(L[2])
+        
 
     impact = [km_since / 15000 * 30, car_age * 1.5, km_driven / 200000 * 20,
               style * 5, traffic * 3, road * 5, monsoon * 4]
