@@ -189,3 +189,157 @@ if st.button(t["button"]):
         text = t["msg"].format(part=pname, km=km_left, score=score)
         st.text_area("reminder", text, label_visibility="collapsed")
         st.link_button(t["send"], "https://wa.me/?text=" + urllib.parse.quote(text))
+        # ---------- Nearby service centres ----------
+ICON_PIN = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8B5E3C" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>'
+NEAR = {
+ "English": ("Nearby service centres", "Your city or area", "Maruti Suzuki service centre", "Any car garage", "Search for", "Open in Google Maps", "Type your city or pincode to see service centres on the map.", "e.g. Salt Lake, Kolkata"),
+ "हिन्दी": ("आस-पास के सर्विस सेंटर", "आपका शहर या इलाका", "मारुति सुज़ुकी सर्विस सेंटर", "कोई भी कार गैराज", "खोजें", "Google Maps में खोलें", "मैप पर सर्विस सेंटर देखने के लिए अपना शहर या पिनकोड लिखें।", "जैसे: सॉल्ट लेक, कोलकाता"),
+ "বাংলা": ("কাছের সার্ভিস সেন্টার", "আপনার শহর বা এলাকা", "মারুতি সুজুকি সার্ভিস সেন্টার", "যেকোনো গাড়ির গ্যারেজ", "খুঁজুন", "Google Maps-এ খুলুন", "ম্যাপে সার্ভিস সেন্টার দেখতে আপনার শহর বা পিনকোড লিখুন।", "যেমন: সল্টলেক, কলকাতা"),
+}
+N = NEAR[lang]
+section(ICON_PIN, N[0])
+from streamlit_geolocation import streamlit_geolocation
+LOC = {
+ "English": ("Use my current location", "Click the location button below, then allow access in your browser.", "Location found. Showing centres near you.", "Waiting for location. You can also type your city below."),
+ "हिन्दी": ("मेरी मौजूदा लोकेशन इस्तेमाल करें", "नीचे लोकेशन बटन दबाएँ और ब्राउज़र में अनुमति दें।", "लोकेशन मिल गई। आपके पास के सेंटर दिख रहे हैं।", "लोकेशन का इंतज़ार है। आप नीचे अपना शहर भी लिख सकते हैं।"),
+ "বাংলা": ("আমার বর্তমান লোকেশন ব্যবহার করুন", "নিচের লোকেশন বোতাম চাপুন এবং ব্রাউজারে অনুমতি দিন।", "লোকেশন পাওয়া গেছে। আপনার কাছের সেন্টার দেখানো হচ্ছে।", "লোকেশনের অপেক্ষা চলছে। নিচে শহরের নামও লিখতে পারেন।"),
+}
+LC = LOC[lang]
+coords = None
+if st.toggle("📡  " + LC[0]):
+    st.caption(LC[1])
+    loc = streamlit_geolocation()
+    if loc and loc.get("latitude") and loc.get("longitude"):
+        coords = f"{loc['latitude']},{loc['longitude']}"
+        st.success(LC[2])
+    else:
+        st.caption(LC[3])
+place = st.text_input("📍  " + N[1], "", placeholder=N[7])
+kind = st.radio(N[4], [N[2], N[3]], horizontal=True)
+target = coords or place.strip()
+if target:
+    kw = "Maruti Suzuki service centre" if kind == N[2] else "car service garage"
+    q = urllib.parse.quote(f"{kw} near {target}")
+    st.components.v1.iframe(f"https://www.google.com/maps?q={q}&output=embed", height=380)
+    st.link_button(N[5], f"https://www.google.com/maps/search/?api=1&query={q}")
+else:
+    st.caption(N[6])
+    # ---------- Service centre list (OpenStreetMap) ----------
+import math
+import requests
+UA = {"User-Agent": "CarVital-student-prototype/1.0"}
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def geocode(q):
+    r = requests.get("https://nominatim.openstreetmap.org/search",
+                     params={"q": q, "format": "json", "limit": 1, "countrycodes": "in"},
+                     headers=UA, timeout=15)
+    r.raise_for_status()
+    d = r.json()
+    return (float(d[0]["lat"]), float(d[0]["lon"])) if d else None
+
+OVERPASS = ["https://overpass-api.de/api/interpreter",
+            "https://overpass.kumi.systems/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter"]
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def find_centres(lat, lon, radius_m, maruti):
+    ar = f"(around:{radius_m},{lat},{lon})"
+    if maruti:
+        body = (f'nwr["name"~"Maruti|Suzuki|Nexa|Arena",i]["shop"~"^(car|car_repair)$"]{ar};'
+                f'nwr["brand"~"Maruti|Suzuki",i]["shop"~"^(car|car_repair)$"]{ar};')
+    else:
+        body = f'nwr["shop"="car_repair"]{ar};'
+    q = f"[out:json][timeout:25];({body});out center tags 60;"
+    data, last = None, None
+    for url in OVERPASS:
+        try:
+            r = requests.post(url, data={"data": q}, headers=UA, timeout=30)
+            r.raise_for_status()
+            data = r.json()
+            break
+        except Exception as e:
+            last = e
+    if data is None:
+        raise last
+    out, seen = [], set()
+    for el in data.get("elements", []):
+        tg = el.get("tags", {})
+        la = el.get("lat") or el.get("center", {}).get("lat")
+        lo = el.get("lon") or el.get("center", {}).get("lon")
+        if la is None or lo is None:
+            continue
+        key = (tg.get("name", ""), round(la, 4), round(lo, 4))
+        if key in seen:
+            continue
+        seen.add(key)
+        parts = [tg.get(k) for k in ("addr:housenumber", "addr:street", "addr:suburb", "addr:city", "addr:postcode")]
+        addr = tg.get("addr:full") or ", ".join(p for p in parts if p)
+        p1, p2 = math.radians(lat), math.radians(la)
+        a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lo - lon) / 2) ** 2
+        dist = 6371 * 2 * math.asin(math.sqrt(a))
+        out.append({"name": tg.get("name", ""), "addr": addr, "dist": dist, "lat": la, "lon": lo,
+                    "phone": tg.get("phone") or tg.get("contact:phone") or "",
+                    "hours": tg.get("opening_hours", "")})
+    return sorted(out, key=lambda x: x["dist"])[:10]
+
+LST = {
+ "English": ("Service centres near you", "Search radius (km)", "{n} found within {r} km, nearest first",
+             "No centres found here on OpenStreetMap. Try a larger radius, choose Any car garage, or use the Google map above.",
+             "Directions", "Phone", "Hours", "Address not listed", "Workshop (name not listed)",
+             "List from OpenStreetMap contributors. It may be incomplete, so confirm by phone before visiting.",
+             "Could not reach the map data service. Check your internet and try again.",
+             "Could not find that place. Try adding the city name."),
+ "हिन्दी": ("आपके पास के सर्विस सेंटर", "खोज की दूरी (किमी)", "{r} किमी के अंदर {n} मिले, सबसे पास वाले पहले",
+            "यहाँ OpenStreetMap पर कोई सेंटर नहीं मिला। दूरी बढ़ाएँ, कोई भी कार गैराज चुनें, या ऊपर का Google मैप देखें।",
+            "रास्ता", "फ़ोन", "समय", "पता उपलब्ध नहीं", "वर्कशॉप (नाम उपलब्ध नहीं)",
+            "सूची OpenStreetMap योगदानकर्ताओं से है। यह अधूरी हो सकती है, जाने से पहले फ़ोन पर पुष्टि करें।",
+            "मैप डेटा सेवा तक नहीं पहुँच सके। इंटरनेट जाँचकर दोबारा कोशिश करें।",
+            "वह जगह नहीं मिली। शहर का नाम जोड़कर देखें।"),
+ "বাংলা": ("আপনার কাছের সার্ভিস সেন্টার", "খোঁজার দূরত্ব (কিমি)", "{r} কিমির মধ্যে {n}টি পাওয়া গেছে, কাছেরটি আগে",
+           "এখানে OpenStreetMap-এ কোনো সেন্টার পাওয়া যায়নি। দূরত্ব বাড়ান, যেকোনো গাড়ির গ্যারেজ বেছে নিন, বা উপরের Google ম্যাপ দেখুন।",
+           "পথ দেখুন", "ফোন", "সময়", "ঠিকানা নেই", "ওয়ার্কশপ (নাম নেই)",
+           "তালিকাটি OpenStreetMap অবদানকারীদের থেকে। এটি অসম্পূর্ণ হতে পারে, যাওয়ার আগে ফোনে নিশ্চিত করুন।",
+           "ম্যাপ ডেটা সেবায় পৌঁছানো যায়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।",
+           "জায়গাটি পাওয়া যায়নি। শহরের নাম যোগ করে চেষ্টা করুন।"),
+}
+LS = LST[lang]
+
+latlon, geo_err = None, None
+if coords:
+    latlon = tuple(float(v) for v in coords.split(","))
+elif place.strip():
+    try:
+        latlon = geocode(place.strip())
+        if latlon is None:
+            geo_err = LS[11]
+    except Exception:
+        geo_err = LS[10]
+
+if geo_err:
+    st.warning(geo_err)
+elif latlon:
+    section(ICON_PIN, LS[0])
+    rad = st.select_slider(LS[1], options=[3, 5, 10, 20], value=5)
+    try:
+        with st.spinner("..."):
+            centres = find_centres(latlon[0], latlon[1], rad * 1000, kind == N[2])
+    except Exception as e:
+        centres = None
+        st.warning(LS[10])
+        st.caption("Details: " + str(e)[:160])
+    if centres is not None:
+        if not centres:
+            st.info(LS[3])
+        else:
+            st.caption(LS[2].format(n=len(centres), r=rad))
+            for cn in centres:
+                with st.container(border=True):
+                    st.markdown(f"**{cn['name'] or LS[8]}**  ·  {cn['dist']:.1f} km")
+                    st.caption(cn["addr"] or LS[7])
+                    if cn["phone"]:
+                        st.write(f"{LS[5]}: {cn['phone']}")
+                    if cn["hours"]:
+                        st.caption(f"{LS[6]}: {cn['hours']}")
+                    st.link_button(LS[4], f"https://www.google.com/maps/dir/?api=1&destination={cn['lat']},{cn['lon']}")
+            st.caption(LS[9])
