@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 
-st.set_page_config(page_title="CAR VITAL", page_icon="🍃")
+st.set_page_config(page_title="CAR VITAL", page_icon="logo.png")
 score_model = joblib.load("score_model.pkl")
 part_model = joblib.load("part_model.pkl")
 
