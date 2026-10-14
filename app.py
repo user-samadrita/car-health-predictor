@@ -343,3 +343,103 @@ elif latlon:
                         st.caption(f"{LS[6]}: {cn['hours']}")
                     st.link_button(LS[4], f"https://www.google.com/maps/dir/?api=1&destination={cn['lat']},{cn['lon']}")
             st.caption(LS[9])
+            # ---------- Part highlight diagram + calendar ----------
+row2 = pd.DataFrame([{"car_age": car_age, "km_driven": km_driven, "km_since_service": km_since,
+                      "driving_style": style, "traffic": traffic, "rough_road": road}])
+score2 = max(0, int(score_model.predict(row2)[0]) - monsoon * 4)
+part2 = part_model.predict(row2)[0]
+pname2 = t["parts"][part2]
+
+ICON_TARGET = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8B5E3C" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>'
+ICON_CAL = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8B5E3C" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>'
+
+def car_svg(part, hi):
+    def c_(n, base):
+        return hi if part == n else base
+    def a_(n):
+        return '<animate attributeName="opacity" values="1;0.45;1" dur="1.6s" repeatCount="indefinite"/>' if part == n else ""
+    s = f"""<svg viewBox="0 0 200 340" width="190" xmlns="http://www.w3.org/2000/svg">
+<rect x="50" y="18" width="100" height="304" rx="44" fill="#F1E8D6" stroke="#8B5E3C" stroke-width="2.5"/>
+<rect x="62" y="30" width="76" height="66" rx="16" fill="{c_('Engine oil', '#E4D3BE')}" stroke="#8B5E3C" stroke-width="1.5">{a_('Engine oil')}</rect>
+<rect x="68" y="38" width="26" height="16" rx="3" fill="{c_('Battery', '#D9C6AE')}" stroke="#8B5E3C" stroke-width="1.5">{a_('Battery')}</rect>
+<path d="M66 110H134L142 150H58Z" fill="#D8C7A8"/>
+<rect x="62" y="154" width="76" height="66" rx="8" fill="#EADCC9"/>
+<path d="M60 226H140L132 254H68Z" fill="#D8C7A8"/>
+<line x1="40" y1="78" x2="160" y2="78" stroke="{c_('Suspension', '#C4AA8D')}" stroke-width="6" stroke-linecap="round">{a_('Suspension')}</line>
+<line x1="40" y1="262" x2="160" y2="262" stroke="{c_('Suspension', '#C4AA8D')}" stroke-width="6" stroke-linecap="round">{a_('Suspension')}</line>
+<rect x="26" y="52" width="20" height="52" rx="6" fill="#4B3B2F"/>
+<rect x="154" y="52" width="20" height="52" rx="6" fill="#4B3B2F"/>
+<rect x="26" y="236" width="20" height="52" rx="6" fill="#4B3B2F"/>
+<rect x="154" y="236" width="20" height="52" rx="6" fill="#4B3B2F"/>
+<circle cx="36" cy="78" r="7" fill="{c_('Brakes', '#C4AA8D')}">{a_('Brakes')}</circle>
+<circle cx="164" cy="78" r="7" fill="{c_('Brakes', '#C4AA8D')}">{a_('Brakes')}</circle>
+<circle cx="36" cy="262" r="7" fill="{c_('Brakes', '#C4AA8D')}">{a_('Brakes')}</circle>
+<circle cx="164" cy="262" r="7" fill="{c_('Brakes', '#C4AA8D')}">{a_('Brakes')}</circle>
+</svg>"""
+    return s.replace("\n", "")
+
+HLT = {
+ "English": ("Where to look", "Most at risk right now", "Based on the inputs above. Updates live.",
+             {"Brakes": "Squealing, a longer stopping distance or a soft pedal are warning signs.",
+              "Engine oil": "Check the oil level and colour, and the service sticker.",
+              "Suspension": "Listen for knocks over bumps and watch for uneven tyre wear.",
+              "Battery": "Slow cranking or dim lights can mean a weak battery."}),
+ "हिन्दी": ("कहाँ देखें", "अभी सबसे ज़्यादा जोखिम", "ऊपर दी गई जानकारी के आधार पर, तुरंत बदलता है।",
+            {"Brakes": "चीं-चीं की आवाज़, रुकने में ज़्यादा दूरी या नरम पेडल चेतावनी हैं।",
+             "Engine oil": "ऑयल का लेवल और रंग देखें, और सर्विस स्टिकर जाँचें।",
+             "Suspension": "गड्ढों पर खटखट की आवाज़ सुनें और टायर का असमान घिसाव देखें।",
+             "Battery": "स्टार्ट होने में देर या मंद लाइटें कमज़ोर बैटरी का संकेत हो सकती हैं।"}),
+ "বাংলা": ("কোথায় দেখবেন", "এখন সবচেয়ে ঝুঁকিতে", "উপরের তথ্য অনুযায়ী, সঙ্গে সঙ্গে বদলায়।",
+           {"Brakes": "কর্কশ আওয়াজ, থামতে বেশি দূরত্ব বা নরম প্যাডেল সতর্কতার চিহ্ন।",
+            "Engine oil": "অয়েলের লেভেল ও রঙ দেখুন এবং সার্ভিস স্টিকার মিলিয়ে নিন।",
+            "Suspension": "গর্তে ঠকঠক আওয়াজ শুনুন এবং টায়ারের অসম ক্ষয় দেখুন।",
+            "Battery": "স্টার্ট নিতে দেরি বা আলো ম্লান হলে ব্যাটারি দুর্বল হতে পারে।"}),
+}
+H = HLT[lang]
+hi = "#98A07C" if score2 >= 70 else "#D9B77A" if score2 >= 40 else "#C98F73"
+section(ICON_TARGET, H[0])
+dc1, dc2 = st.columns([1, 1.3])
+dc1.markdown('<div style="text-align:center">' + car_svg(part2, hi) + '</div>', unsafe_allow_html=True)
+with dc2:
+    st.caption(H[1].upper())
+    st.subheader(pname2)
+    st.write(H[3][part2])
+    st.caption(H[2])
+
+CLT = {
+ "English": ("Add to calendar", "Next service date", "Download .ics file", "Add to Google Calendar",
+             "Car Vital: {part} check", "Car Vital reminder: {part} needs checking. Car health score: {score}/100.",
+             "Pick a date and save the reminder to your phone or computer calendar."),
+ "हिन्दी": ("कैलेंडर में जोड़ें", "अगली सर्विस की तारीख", ".ics फ़ाइल डाउनलोड करें", "Google Calendar में जोड़ें",
+            "Car Vital: {part} की जाँच", "Car Vital रिमाइंडर: {part} की जाँच करवाएँ। कार हेल्थ स्कोर: {score}/100।",
+            "तारीख चुनें और रिमाइंडर अपने फ़ोन या कंप्यूटर के कैलेंडर में सेव करें।"),
+ "বাংলা": ("ক্যালেন্ডারে যোগ করুন", "পরবর্তী সার্ভিসের তারিখ", ".ics ফাইল ডাউনলোড করুন", "Google Calendar-এ যোগ করুন",
+           "Car Vital: {part} পরীক্ষা", "Car Vital রিমাইন্ডার: {part} পরীক্ষা করান। গাড়ির হেলথ স্কোর: {score}/100।",
+           "তারিখ বেছে রিমাইন্ডারটি ফোন বা কম্পিউটারের ক্যালেন্ডারে সেভ করুন।"),
+}
+CL = CLT[lang]
+st.markdown("<style>.stDownloadButton > button{border-radius:24px;background:#6B7B4C;color:#F4EFE6;border:none;padding:8px 28px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase}.stDownloadButton > button:hover{background:#8B5E3C;color:#F4EFE6}</style>", unsafe_allow_html=True)
+section(ICON_CAL, CL[0])
+_today = datetime.date.today()
+_next = last_date + datetime.timedelta(days=180)
+if _next < _today:
+    _next = _today + datetime.timedelta(days=7)
+next_date = st.date_input("📅  " + CL[1], _next, min_value=_today)
+ev_title = CL[4].format(part=pname2)
+ev_desc = CL[5].format(part=pname2, score=score2)
+d1 = next_date.strftime("%Y%m%d")
+d2 = (next_date + datetime.timedelta(days=1)).strftime("%Y%m%d")
+def _esc(x):
+    return x.replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", "\\n")
+stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+ics = "\r\n".join(["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Car Vital//EN", "BEGIN:VEVENT",
+                   "UID:carvital-" + stamp + "@carvital", "DTSTAMP:" + stamp,
+                   "DTSTART;VALUE=DATE:" + d1, "DTEND;VALUE=DATE:" + d2,
+                   "SUMMARY:" + _esc(ev_title), "DESCRIPTION:" + _esc(ev_desc),
+                   "BEGIN:VALARM", "TRIGGER:-P1D", "ACTION:DISPLAY", "DESCRIPTION:" + _esc(ev_title), "END:VALARM",
+                   "END:VEVENT", "END:VCALENDAR"])
+b1, b2 = st.columns(2)
+b1.download_button(CL[2], ics, file_name="car_vital_service.ics", mime="text/calendar")
+b2.link_button(CL[3], "https://calendar.google.com/calendar/render?action=TEMPLATE&text="
+               + urllib.parse.quote(ev_title) + "&dates=" + d1 + "/" + d2 + "&details=" + urllib.parse.quote(ev_desc))
+st.caption(CL[6])
